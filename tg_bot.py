@@ -1,3 +1,5 @@
+from aiogram.types import BotCommand
+
 import django_setup
 import asyncio
 import logging
@@ -28,10 +30,20 @@ chrome_options.add_argument("--disable-blink-features=AutomationControlled")
 driver = webdriver.Chrome(options=chrome_options)
 
 
+async def set_commands():
+    commands = [
+        BotCommand(command="/start", description="Начать заново"),
+        BotCommand(command="/search", description="Поиск на РКН"),
+        BotCommand(command="/domains", description="Список доменов")
+    ]
+    await bot.set_my_commands(commands)
+
+
 async def main() -> None:
     logging.info("Бот успешно запущен.")
     try:
         await bot.delete_webhook(drop_pending_updates=True)
+        await set_commands()
         await dp.start_polling(bot)  # Запуск бота
     finally:
         if driver:
