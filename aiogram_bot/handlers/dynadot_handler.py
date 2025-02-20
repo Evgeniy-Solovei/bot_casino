@@ -78,6 +78,7 @@ async def process_domains(file_path):
 # 🕹️ Обработка нажатия кнопки "Да"
 @router.callback_query(F.data == "yes_dynadot")
 async def handle_yes_dynadot(callback_query: CallbackQuery, state: FSMContext):
+    await callback_query.answer()
     await callback_query.message.answer("⏳ Начинаю обработку...")
 
     file_path = await process_domains(INPUT_FILE)
@@ -103,6 +104,7 @@ async def handle_yes_dynadot(callback_query: CallbackQuery, state: FSMContext):
 # 🕹️ Обработка нажатия кнопки "Нет" → ждем файл
 @router.callback_query(F.data == "no_dynadot")
 async def handle_no_dynadot(callback_query: CallbackQuery, state: FSMContext):
+    await callback_query.answer()
     await callback_query.message.answer("📂 Отправь файл с доменами (.txt)")
     await state.set_state(DomainStates.WaitingForFile)
 
