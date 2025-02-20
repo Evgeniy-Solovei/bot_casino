@@ -17,7 +17,7 @@ services:
        sh -c "python manage.py migrate && uvicorn bot_core.asgi:application --host 0.0.0.0 --port 8000 & python tg_bot.py"
     # Параметр сопоставляющий порты между хостом(8000) и контейнером(8000).
     ports:
-      - '8000:8000'
+      - '8008:8000'
     environment:
       TZ: Europe/Moscow
     # Подгружаем глобальные (логин,пароль БД) переменные для БД из .env файла.
