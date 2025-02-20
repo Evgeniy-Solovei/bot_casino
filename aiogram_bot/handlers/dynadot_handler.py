@@ -57,20 +57,24 @@ async def process_domains(file_path):
 
     available_domains = []
 
-    async with aiohttp.ClientSession() as session:
-        with open(file_path, "r") as file:
-            for domain in file:
-                domain = domain.strip()
-                if domain:
-                    result = await check_domain_availability(domain, session)
-                    if result:
-                        available_domains.append(result)
+    try:
+        async with aiohttp.ClientSession() as session:
+            with open(file_path, "r") as file:
+                for domain in file:
+                    domain = domain.strip()
+                    if domain:
+                        result = await check_domain_availability(domain, session)
+                        if result:
+                            available_domains.append(result)
 
-    if available_domains:
-        with open(OUTPUT_FILE, "w") as file:
-            file.writelines(available_domains)
-        print(f"✅ Результаты сохранены в {OUTPUT_FILE}")
-        return OUTPUT_FILE
+        if available_domains:
+            with open(OUTPUT_FILE, "w") as file:
+                file.writelines(available_domains)
+            print(f"✅ Результаты сохранены в {OUTPUT_FILE}")
+            return OUTPUT_FILE
+
+    except Exception as e:
+        print(f"⚠️ Ошибка при обработке доменов: {e}")
 
     return None
 
@@ -119,8 +123,12 @@ async def handle_file_upload(message: Message, state: FSMContext):
         return
 
     file_path = os.path.join(UPLOAD_DIR, file_name)
-    await message.bot.download(message.document.file_id, file_path)
-    await message.answer("⏳ Обрабатываю загруженный файл...")
+    try:
+        await message.bot.download(message.document.file_id, file_path)
+        await message.answer("⏳ Обрабатываю загруженный файл...")
+    except Exception as e:
+        await message.answer(f"❌ Ошибка при загрузке файла: {e}")
+        return
 
     processed_file = await process_domains(file_path)
 

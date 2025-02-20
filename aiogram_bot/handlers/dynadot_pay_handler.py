@@ -1,7 +1,7 @@
 import os
 import aiohttp
 from aiogram import Router, F
-from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile
+from aiogram.types import CallbackQuery, Message, FSInputFile
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from dotenv import load_dotenv
@@ -58,8 +58,12 @@ async def handle_yes_dynadot_pay(callback_query: CallbackQuery, state: FSMContex
         await callback_query.message.answer("❌ Файл с доменами не найден.")
         return
 
-    with open(file_path, "r") as file:
-        domains = [line.strip().split()[0] for line in file if line.strip()]
+    try:
+        with open(file_path, "r") as file:
+            domains = [line.strip().split()[0] for line in file if line.strip()]
+    except Exception as e:
+        await callback_query.message.answer(f"❌ Ошибка при обработке файла: {e}")
+        return
 
     if not domains:
         await callback_query.message.answer("❌ Нет доменов для покупки.")
@@ -94,11 +98,23 @@ async def handle_file_upload(message: Message, state: FSMContext):
     if not file_name.endswith(".txt"):
         await message.answer("❌ Нужно загрузить .txt файл.")
         return
+
     file_path = os.path.join(UPLOAD_DIR, file_name)
-    await message.bot.download(message.document.file_id, file_path)
+    try:
+        await message.bot.download(message.document.file_id, file_path)
+    except Exception as e:
+        await message.answer(f"❌ Ошибка при загрузке файла: {e}")
+        return
+
     await message.answer("⏳ Обрабатываю файл...")
-    with open(file_path, "r") as file:
-        domains = [line.strip().split()[0] for line in file if line.strip()]
+
+    try:
+        with open(file_path, "r") as file:
+            domains = [line.strip().split()[0] for line in file if line.strip()]
+    except Exception as e:
+        await message.answer(f"❌ Ошибка при обработке файла: {e}")
+        return
+
     if domains:
         # Покупка доменов через API
         async with aiohttp.ClientSession() as session:

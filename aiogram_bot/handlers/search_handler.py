@@ -27,11 +27,25 @@ async def handle_user_query(message: types.Message, state: FSMContext):
     if not user_query:
         await message.reply("❌ Вы не ввели запрос. Попробуйте снова.")
         return
-
     await message.reply(f"🔍 Запрос '{user_query}' принят. Обрабатываем данные...")
-    await asyncio.to_thread(search_site, user_query, max_pages=20)
+    try:
+        await asyncio.to_thread(search_site, user_query, max_pages=20)
+    except Exception as e:
+        await message.reply(f"⚠️ Произошла ошибка при поиске: {e}")
+        await state.clear()
+        return
 
-    if os.path.exists(OUTPUT_FILE):
+    if not os.path.exists(OUTPUT_FILE):
+        await message.reply("❌ Не удалось найти файл с результатами. Попробуйте позже.")
+        await state.clear()
+        return
+
+    if os.path.getsize(OUTPUT_FILE) == 0:
+        await message.reply("❌ Файл результатов пуст. Вероятно, ничего не найдено.")
+        await state.clear()
+        return
+
+    try:
         file = FSInputFile(OUTPUT_FILE)
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="Да", callback_data="yes_dynadot")],
@@ -44,8 +58,8 @@ async def handle_user_query(message: types.Message, state: FSMContext):
                     "- Хочешь отредактировать файл? Жми <b>[Нет]</b> и кидай файл.",
             reply_markup=keyboard, parse_mode="HTML"
         )
-    else:
-        await message.reply("❌ Не удалось собрать данные, попробуйте позже.")
-
-    await state.clear()
+    except Exception as e:
+        await message.reply(f"⚠️ Ошибка при отправке файла: {e}")
+    finally:
+        await state.clear()
 
