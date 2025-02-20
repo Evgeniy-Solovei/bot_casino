@@ -15,8 +15,13 @@ RUN apt-get update && \
     echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list && \
     apt-get update && \
     apt-get install -y google-chrome-stable && \
-    CHROME_DRIVER_VERSION=$(curl -sS chromedriver.storage.googleapis.com/LATEST_RELEASE) && \
-    wget -O /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/$CHROME_DRIVER_VERSION/chromedriver_linux64.zip && \
+    # Удаляем старую версию chromedriver (если она есть)
+    rm -f /usr/local/bin/chromedriver && \
+    # Получаем текущую версию Chrome
+    CHROME_VERSION=$(google-chrome --version | sed 's/Google Chrome \([0-9]*\.[0-9]*\.[0-9]*\.[0-9]*\)/\1/') && \
+    # Загружаем совместимую версию chromedriver
+    CHROMEDRIVER_VERSION=$(curl -sS chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION) && \
+    wget -O /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip && \
     unzip /tmp/chromedriver.zip -d /usr/local/bin/ && \
     chmod +x /usr/local/bin/chromedriver && \
     rm /tmp/chromedriver.zip && \
@@ -24,7 +29,7 @@ RUN apt-get update && \
 
 # Устанавливаем зависимости Python
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install -r requirements.txt
 
 # Копируем проект
 COPY . .
