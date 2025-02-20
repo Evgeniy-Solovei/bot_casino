@@ -1,3 +1,4 @@
+import django_setup
 import asyncio
 import logging
 import os
