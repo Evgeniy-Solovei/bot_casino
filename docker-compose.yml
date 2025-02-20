@@ -29,15 +29,7 @@ services:
     # Контейнер будет перезапускаться, если он был остановлен, за исключением, когда он был остановлен вручную.
     restart: unless-stopped
 
-# Указываем глобально, какие volumes у нас есть.
-volumes:
-  db_data:
-    driver: local
-  pgadmin:
-    driver: local
-
-
-# Соединяем все контейнеры, где указана сеть skill_tap, в одну сеть.
+# Соединяем все контейнеры, где указана сеть bot_core, в одну сеть.
 networks:
-  skill_tap:
+  bot_core:
     driver: bridge
