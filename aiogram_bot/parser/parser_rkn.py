@@ -6,23 +6,10 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from bs4 import BeautifulSoup
 from selenium.webdriver.support.ui import Select
-
+from tg_bot import driver
 
 BASE_URL = 'https://reestr.rublacklist.net/ru/'
 OUTPUT_FILE = '../file_parser/urls_to_check.txt'
-chrome_options = webdriver.ChromeOptions()
-
-# async def start_browser():
-#     global driver
-#     if driver is None:
-#         driver = webdriver.Chrome(options=chrome_options)
-#
-#
-# async def stop_browser():
-#     global driver
-#     if driver:
-#         driver.quit()
-#         driver = None
 
 
 def get_domain(url):
@@ -63,49 +50,35 @@ def save_urls_to_file(urls, filename):
 
 
 def search_site(query, max_pages=25):
-    """Основная функция поиска с пагинацией (ускоренная версия)"""
-    dir_path = os.path.dirname(OUTPUT_FILE)
-    if not os.path.exists(dir_path):
-        os.makedirs(dir_path)
+    """Функция поиска сайтов"""
+    os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
     if os.path.exists(OUTPUT_FILE):
         os.remove(OUTPUT_FILE)
 
-    driver = webdriver.Chrome(options=chrome_options)
-    all_sites = set()  # Используем `set` сразу, чтобы не хранить дубликаты
+    all_sites = set()
     try:
-        # Инициализация и поиск
         driver.get(BASE_URL)
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "q"))).send_keys(query)
         driver.find_element(By.XPATH, "//button[contains(text(), 'Найти')]").click()
-        # Фильтр по статусу
-        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "selectStatus")))
-        Select(driver.find_element(By.ID, "selectStatus")).select_by_value("2")
-        current_page = 1
-        while current_page <= max_pages:
-            # Ждём загрузки страницы перед сбором данных
-            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, 'div.table_td.td_site')))
-            # Извлекаем данные (быстрее через BeautifulSoup)
-            page_sites = get_sites_from_page(driver)
+
+        Select(WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.ID, "selectStatus"))
+        )).select_by_value("2")
+
+        for current_page in range(1, max_pages + 1):
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, 'div.table_td.td_site')))
+            page_sites = get_sites_from_page()
             all_sites.update(page_sites)
-            # Сохраняем только раз в 5 страниц
-            if current_page % 5 == 0 or current_page == max_pages:
-                save_urls_to_file(all_sites, OUTPUT_FILE)
-            print(f"Страница {current_page}: собрано {len(page_sites)} URL | Всего уникальных: {len(all_sites)}")
-            # Переход на следующую страницу
+            save_urls_to_file(all_sites, OUTPUT_FILE)
+            print(f"Страница {current_page}: собрано {len(page_sites)} URL | Всего: {len(all_sites)}")
             next_btn = driver.find_elements(By.CSS_SELECTOR, 'a.btn_next:not(.disabled)')
             if not next_btn:
                 break
             next_btn[0].click()
-            current_page += 1
+
     except Exception as e:
-        print(f"Ошибка: {e}")
+        print(f"Ошибка при поиске: {e}")
     finally:
-        driver.quit()
-        save_urls_to_file(all_sites, OUTPUT_FILE)  # Финальная запись в файл
-        print(f"\nСбор завершен. Всего уникальных доменов: {len(all_sites)}")
-        print(f"Файл сохранен: {OUTPUT_FILE}")
-
-
-if __name__ == "__main__":
-    search_query = input("Введите домен, URL или IP-адрес для поиска: ")
-    search_site(search_query)
+        save_urls_to_file(all_sites, OUTPUT_FILE)
+        print(f"\nСбор завершен. Уникальных доменов: {len(all_sites)}")
