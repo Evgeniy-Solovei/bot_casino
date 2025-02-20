@@ -1,0 +1,43 @@
+# Указываем версию Docker Compose
+version: '3.9'
+
+services:
+  # Определяем название приложения в services.
+  bot_core:
+    # Задаём название сети для контейнера.
+    networks:
+      - bot_core
+    # Задаём имя контейнера.
+    container_name: bot_core_container
+    # Сообщаем что для сервиса надо запустить Dockerfile и указываем путь к нему.
+    build:
+      dockerfile: Dockerfile
+    # Устанавливаем команду для применения миграций и для запуска сервера.
+    command: >
+       sh -c "python manage.py migrate && uvicorn bot_core.asgi:application --host 0.0.0.0 --port 8000 & python tg_bot.py"
+    # Параметр сопоставляющий порты между хостом(8000) и контейнером(8000).
+    ports:
+      - '8000:8000'
+    environment:
+      TZ: Europe/Moscow
+    # Подгружаем глобальные (логин,пароль БД) переменные для БД из .env файла.
+    env_file:
+      - .env
+    # Указываем что всё(все локальные изменения) в текущей директории должно быть доступно в контейнере.
+    volumes:
+      - .:/bot_core
+    # Контейнер будет перезапускаться, если он был остановлен, за исключением, когда он был остановлен вручную.
+    restart: unless-stopped
+
+# Указываем глобально, какие volumes у нас есть.
+volumes:
+  db_data:
+    driver: local
+  pgadmin:
+    driver: local
+
+
+# Соединяем все контейнеры, где указана сеть skill_tap, в одну сеть.
+networks:
+  skill_tap:
+    driver: bridge
