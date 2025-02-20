@@ -29,8 +29,7 @@ async def handle_user_query(message: types.Message, state: FSMContext):
         return
 
     await message.reply(f"🔍 Запрос '{user_query}' принят. Обрабатываем данные...")
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, search_site, user_query)
+    await asyncio.to_thread(search_site, user_query, max_pages=20)
 
     if os.path.exists(OUTPUT_FILE):
         file = FSInputFile(OUTPUT_FILE)

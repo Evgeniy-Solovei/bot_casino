@@ -4,7 +4,6 @@ from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
-from django.db import transaction
 from dotenv import load_dotenv
 
 from bot.models import PurchasedDomain
@@ -13,13 +12,13 @@ load_dotenv()
 API_KEY = os.getenv("API_KEY")
 
 API_URL = "https://api.dynadot.com/api3.json"
-UPLOAD_DIR = "uploads"
+UPLOAD_DIR = "../file_parser/"
 OUTPUT_FILE = "purchased_domains.txt"
 
 router = Router()
 
 
-class DomainStates(StatesGroup):
+class DomainPayStates(StatesGroup):
     WaitingForConfirmation = State()
     WaitingForFile = State()
     ProcessingPurchase = State()
@@ -42,9 +41,8 @@ async def purchase_domains(domains, session):
             print(f"⚠️ Ошибка при покупке доменов: {e}")
 
     # Сохранение в БД
-    async with transaction.atomic():
-        for domain in purchased:
-            await PurchasedDomain.objects.acreate(domain=domain)
+    purchased_domains = [PurchasedDomain(domain=domain) for domain in purchased]
+    await PurchasedDomain.objects.abulk_create(purchased_domains)
 
     return purchased
 
@@ -52,6 +50,7 @@ async def purchase_domains(domains, session):
 # 🕹️ Обработка нажатия кнопки "Да" → Покупка доменов
 @router.callback_query(F.data == "yes_dynadot_pay")
 async def handle_yes_dynadot_pay(callback_query: CallbackQuery, state: FSMContext):
+    await callback_query.answer()
     await callback_query.message.answer("💳 Покупаю домены...")
 
     file_path = os.path.join(UPLOAD_DIR, "available_domains.txt")
@@ -60,7 +59,7 @@ async def handle_yes_dynadot_pay(callback_query: CallbackQuery, state: FSMContex
         return
 
     with open(file_path, "r") as file:
-        domains = [line.strip() for line in file if line.strip()]
+        domains = [line.strip().split()[0] for line in file if line.strip()]
 
     if not domains:
         await callback_query.message.answer("❌ Нет доменов для покупки.")
@@ -83,37 +82,42 @@ async def handle_yes_dynadot_pay(callback_query: CallbackQuery, state: FSMContex
 # 🕹️ Обработка нажатия кнопки "Нет" → Ждем новый файл
 @router.callback_query(F.data == "no_dynadot_pay")
 async def handle_no_dynadot_pay(callback_query: CallbackQuery, state: FSMContext):
+    await callback_query.answer()
     await callback_query.message.answer("📂 Загрузите новый файл с доменами.")
-    await state.set_state(DomainStates.WaitingForFile)
+    await state.set_state(DomainPayStates.WaitingForFile)
 
 
 # 📥 Загрузка и обработка нового файла
-@router.message(DomainStates.WaitingForFile, F.document)
+@router.message(DomainPayStates.WaitingForFile, F.document)
 async def handle_file_upload(message: Message, state: FSMContext):
     file_name = message.document.file_name
-
     if not file_name.endswith(".txt"):
         await message.answer("❌ Нужно загрузить .txt файл.")
         return
-
     file_path = os.path.join(UPLOAD_DIR, file_name)
     await message.bot.download(message.document.file_id, file_path)
-
     await message.answer("⏳ Обрабатываю файл...")
-
     with open(file_path, "r") as file:
-        domains = [line.strip() for line in file if line.strip()]
-
+        domains = [line.strip().split()[0] for line in file if line.strip()]
     if domains:
-        buttons = [
-            [InlineKeyboardButton(text="Да", callback_data="yes_dynadot_pay")],
-            [InlineKeyboardButton(text="Нет", callback_data="no_dynadot_pay")],
-        ]
-        keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
-        await message.answer(
-            "✅ Файл загружен. Хотите сразу купить домены?", reply_markup=keyboard
-        )
-        await state.set_state(DomainStates.WaitingForConfirmation)
+        # Покупка доменов через API
+        async with aiohttp.ClientSession() as session:
+            purchased = await purchase_domains(domains, session)
+
+        if purchased:
+            # Сохранение в БД
+            purchased_domains = [PurchasedDomain(domain=domain) for domain in purchased]
+            await PurchasedDomain.objects.abulk_create(purchased_domains)
+
+            # Сохранение купленных доменов в файл
+            with open(OUTPUT_FILE, "w") as file:
+                file.writelines(f"{domain}\n" for domain in purchased)
+
+            # Отправка документа с купленными доменами
+            file = FSInputFile(OUTPUT_FILE)
+            await message.answer_document(file, caption="✅ Купленные домены сохранены.")
+        else:
+            await message.answer("❌ Не удалось купить домены.")
     else:
         await message.answer("❌ Файл пуст или содержит некорректные данные.")
-        await state.clear()
+    await state.clear()

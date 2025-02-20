@@ -34,7 +34,7 @@ def clean_url(url_text):
     return domain
 
 
-def get_sites_from_page(driver):
+def get_sites_from_page():
     """Извлекает URL с текущей страницы через BeautifulSoup (быстрее, чем Selenium)"""
     soup = BeautifulSoup(driver.page_source, 'html.parser')
     elements = soup.select('div.table_td.td_site a')
@@ -49,7 +49,7 @@ def save_urls_to_file(urls, filename):
     return len(unique_urls)  # Возвращаем количество записей
 
 
-def search_site(query, max_pages=25):
+def search_site(query, max_pages=20):
     """Функция поиска сайтов"""
     os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
     if os.path.exists(OUTPUT_FILE):

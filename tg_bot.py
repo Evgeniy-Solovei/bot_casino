@@ -25,18 +25,19 @@ chrome_options.add_argument("--no-sandbox")
 chrome_options.add_argument("--disable-dev-shm-usage")
 chrome_options.add_argument("--disable-blink-features=AutomationControlled")
 
-# Создаем глобальный экземпляр браузера
 driver = webdriver.Chrome(options=chrome_options)
 
 
 async def main() -> None:
-    logging.info("Бот и браузер успешно запущены.")
+    logging.info("Бот успешно запущен.")
     try:
         await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling(bot)  # Запуск бота
     finally:
-        driver.quit()  # Закрываем браузер при завершении работы
-        logging.info("Браузер закрыт. Бот остановлен.")
+        if driver:
+            driver.quit()  # Закрываем браузер при завершении работы
+            logging.info("Браузер закрыт. Бот остановлен.")
+
 
 if __name__ == "__main__":
     dp.include_routers(start.router)
