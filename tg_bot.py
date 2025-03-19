@@ -4,7 +4,7 @@ import asyncio
 import logging
 import os
 from aiogram import Bot, Dispatcher
-from aiogram_bot.handlers import start, search_handler, dynadot_handler, dynadot_pay_handler
+from aiogram_bot.handlers import start, search_handler, dynadot_handler, dynadot_pay_handler, domains
 from dotenv import load_dotenv
 
 
@@ -40,4 +40,5 @@ if __name__ == "__main__":
     dp.include_routers(search_handler.router)
     dp.include_routers(dynadot_handler.router)
     dp.include_routers(dynadot_pay_handler.router)
+    dp.include_routers(domains.router)
     asyncio.run(main())
