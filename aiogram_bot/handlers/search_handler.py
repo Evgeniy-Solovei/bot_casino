@@ -7,7 +7,6 @@ from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram_bot.parser.parser_rkn import search_site, OUTPUT_FILE
 
-
 router = Router()
 
 
@@ -23,43 +22,43 @@ async def process_search(message: types.Message, state: FSMContext):
 
 @router.message(SearchState.waiting_for_query)
 async def handle_user_query(message: types.Message, state: FSMContext):
-    user_query = message.text.strip()
-    if not user_query:
-        await message.reply("❌ Вы не ввели запрос. Попробуйте снова.")
-        return
-    await message.reply(f"🔍 Запрос '{user_query}' принят. Обрабатываем данные...")
     try:
-        await asyncio.to_thread(search_site, user_query, max_pages=20)
-    except Exception as e:
-        await message.reply(f"⚠️ Произошла ошибка при поиске: {e}")
-        await state.clear()
-        return
+        user_query = message.text.strip()
+        if not user_query:
+            await message.reply("❌ Пустой запрос. Введите текст для поиска.")
+            return
 
-    if not os.path.exists(OUTPUT_FILE):
-        await message.reply("❌ Не удалось найти файл с результатами. Попробуйте позже.")
-        await state.clear()
-        return
+        await message.reply(f"🔍 Начинаю поиск для: {user_query}...")
 
-    if os.path.getsize(OUTPUT_FILE) == 0:
-        await message.reply("❌ Файл результатов пуст. Вероятно, ничего не найдено.")
-        await state.clear()
-        return
+        # Запуск с таймаутом 5 минут
+        await asyncio.wait_for(
+            asyncio.to_thread(search_site, user_query, max_pages=10),
+            timeout=300
+        )
 
-    try:
-        file = FSInputFile(OUTPUT_FILE)
+        if not os.path.exists(OUTPUT_FILE):
+            await message.reply("❌ Файл результатов не найден")
+            return
+
+        file_size = os.path.getsize(OUTPUT_FILE)
+        if file_size == 0:
+            await message.reply("❌ Нет результатов для отображения")
+            return
+
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="Да", callback_data="yes_dynadot")],
             [InlineKeyboardButton(text="Нет", callback_data="no_dynadot")]
         ])
+
         await message.answer_document(
-            file,
-            caption="✅ <b>Вот что я смог найти из разблокированных доменов.</b>\n\n"
-                    "- Хочешь проверить что можно купить Dynadot? Жми <b>[Да]</b>.\n"
-                    "- Хочешь отредактировать файл? Жми <b>[Нет]</b> и кидай файл.",
-            reply_markup=keyboard, parse_mode="HTML"
+            FSInputFile(OUTPUT_FILE),
+            caption="✅ Результаты поиска:\nПроверить доступность доменов?",
+            reply_markup=keyboard
         )
+
+    except asyncio.TimeoutError:
+        await message.reply("🕒 Время выполнения поиска истекло")
     except Exception as e:
-        await message.reply(f"⚠️ Ошибка при отправке файла: {e}")
+        await message.reply(f"⚠️ Ошибка: {str(e)}")
     finally:
         await state.clear()
-
