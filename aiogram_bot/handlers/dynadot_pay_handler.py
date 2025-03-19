@@ -1,11 +1,11 @@
 import os
+import ssl
 import aiohttp
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message, FSInputFile
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from dotenv import load_dotenv
-
 from bot.models import PurchasedDomain
 
 load_dotenv()
@@ -33,10 +33,17 @@ async def purchase_domains(domains, session):
         params.update({f"domain{idx}": domain for idx, domain in enumerate(chunk)})
 
         try:
-            async with session.get(API_URL, params=params) as response:
-                data = await response.json()
-                if data.get("ResponseCode") == "0":
-                    purchased.extend(chunk)
+            # Создаём SSL контекст для отключения проверки сертификатов
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+
+            # Открытие сессии с созданным SSL контекстом
+            async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl_context=ssl_context)) as session:
+                async with session.get(API_URL, params=params) as response:
+                    data = await response.json()
+                    if data.get("ResponseCode") == "0":
+                        purchased.extend(chunk)
         except Exception as e:
             print(f"⚠️ Ошибка при покупке доменов: {e}")
 

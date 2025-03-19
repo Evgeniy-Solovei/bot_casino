@@ -1,3 +1,4 @@
+import ssl
 import aiohttp
 import os
 from aiogram import Router, F
@@ -58,7 +59,11 @@ async def process_domains(file_path):
     available_domains = []
 
     try:
-        async with aiohttp.ClientSession() as session:
+        # Создаём SSL контекст для отключения проверки сертификатов
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl_context=ssl_context)) as session:
             with open(file_path, "r") as file:
                 for domain in file:
                     domain = domain.strip()
