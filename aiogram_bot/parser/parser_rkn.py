@@ -21,8 +21,14 @@ def get_driver():
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    return webdriver.Chrome(options=chrome_options)
+    chrome_options.add_argument("--log-level=3")
+    chrome_options.add_argument("--silent")
+
+    driver = webdriver.Chrome(options=chrome_options)
+    driver.implicitly_wait(5)
+    return driver
 
 
 def get_domain(url):
@@ -59,7 +65,7 @@ def save_urls_to_file(urls, filename):
     return len(unique_urls)
 
 
-def search_site(query, max_pages=10):
+def search_site(query, max_pages=5):
     driver = get_driver()
     try:
         driver.get(BASE_URL)
@@ -70,7 +76,7 @@ def search_site(query, max_pages=10):
         )
 
         # Заполнение поисковой формы
-        search_input = WebDriverWait(driver, 10).until(
+        search_input = WebDriverWait(driver, 20).until(
             EC.visibility_of_element_located((By.NAME, "q"))
         )
         search_input.clear()
@@ -79,13 +85,15 @@ def search_site(query, max_pages=10):
         # Клик по кнопке поиска с повторными попытками
         for _ in range(3):
             try:
-                search_button = WebDriverWait(driver, 15).until(
+                search_button = WebDriverWait(driver, 20).until(
                     EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Найти')]"))
                 )
                 driver.execute_script("arguments[0].click();", search_button)
+                time.sleep(2)  # Пауза после клика
                 break
             except StaleElementReferenceException:
                 driver.refresh()
+                time.sleep(2)
                 continue
 
         # Выбор статуса
@@ -93,6 +101,7 @@ def search_site(query, max_pages=10):
             EC.presence_of_element_located((By.ID, "selectStatus"))
         )
         Select(driver.find_element(By.ID, "selectStatus")).select_by_value("2")
+        time.sleep(1)  # Пауза после выбора статуса
 
         all_sites = []
         current_page = 1
@@ -122,17 +131,18 @@ def search_site(query, max_pages=10):
                 # Скролл и клик с повторными попытками
                 for attempt in range(3):
                     try:
-                        next_btn = WebDriverWait(driver, 15).until(
+                        next_btn = WebDriverWait(driver, 20).until(
                             EC.element_to_be_clickable((By.CSS_SELECTOR, "a.btn_next:not(.disabled)"))
                         )
                         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", next_btn)
-                        time.sleep(1)
+                        time.sleep(1)  # Пауза перед кликом
                         next_btn.click()
 
                         WebDriverWait(driver, 30).until(
                             EC.staleness_of(next_btn)
                         )
                         current_page += 1
+                        time.sleep(2)  # Пауза после перехода на следующую страницу
                         break
                     except StaleElementReferenceException:
                         if attempt == 2:
@@ -142,11 +152,11 @@ def search_site(query, max_pages=10):
                         continue
 
             except Exception as e:
-                logging.error(f"Ошибка: {str(e)}")
+                logging.error(f"Ошибка на странице {current_page}: {str(e)}")
                 break
 
     except Exception as e:
-        logging.error(f"Критическая ошибка: {str(e)}")
+        logging.error(f"Критическая ошибка: {str(e)}", exc_info=True)
     finally:
         driver.quit()
 
