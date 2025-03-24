@@ -41,7 +41,8 @@ async def purchase_domains(domains, session):
             # Открытие сессии с созданным SSL контекстом
             async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl_context=ssl_context)) as session:
                 async with session.get(API_URL, params=params) as response:
-                    data = await response.json()
+                    # Преобразование данных в JSON, игнорируя content-type
+                    data = await response.json(content_type=None)
                     if data.get("ResponseCode") == "0":
                         purchased.extend(chunk)
         except Exception as e:

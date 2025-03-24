@@ -32,7 +32,7 @@ async def handle_user_query(message: types.Message, state: FSMContext):
 
         # Запуск с таймаутом 5 минут
         await asyncio.wait_for(
-            asyncio.to_thread(search_site, user_query, max_pages=10),
+            asyncio.to_thread(search_site, user_query, max_pages=5),
             timeout=300
         )
 
