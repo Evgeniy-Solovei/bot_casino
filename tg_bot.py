@@ -20,6 +20,7 @@ async def set_commands():
     commands = [
         BotCommand(command="/start", description="Начать заново"),
         BotCommand(command="/search", description="Поиск на РКН"),
+        BotCommand(command="/check_domains", description="Проверить домены в Dynadot (прикрепите файл)"),
         BotCommand(command="/domains", description="Список доменов")
     ]
     await bot.set_my_commands(commands)

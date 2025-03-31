@@ -13,7 +13,7 @@ API_KEY = os.getenv("API_KEY")
 
 API_URL = "https://api.dynadot.com/api3.json"
 UPLOAD_DIR = "../file_parser/"
-OUTPUT_FILE = "purchased_domains.txt"
+OUTPUT_FILE = "../file_parser/purchased_domains.txt"
 
 router = Router()
 
@@ -31,29 +31,36 @@ async def purchase_domains(domains, session):
         chunk = domains[i:i + 99]
         params = {"key": API_KEY, "command": "bulk_register"}
         params.update({f"domain{idx}": domain for idx, domain in enumerate(chunk)})
-
         try:
             # Создаём SSL контекст для отключения проверки сертификатов
             ssl_context = ssl.create_default_context()
             ssl_context.check_hostname = False
             ssl_context.verify_mode = ssl.CERT_NONE
-
-            # Открытие сессии с созданным SSL контекстом
-            async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl_context=ssl_context)) as session:
-                async with session.get(API_URL, params=params) as response:
-                    # Преобразование данных в JSON, игнорируя content-type
+            # Открываем сессию с созданным SSL контекстом
+            async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=ssl_context)) as temp_session:
+                async with temp_session.get(API_URL, params=params) as response:
                     data = await response.json(content_type=None)
-                    if data.get("ResponseCode") == "0":
-                        purchased.extend(chunk)
+                    bulk_response = data.get("BulkRegisterResponse", {})
+                    if bulk_response.get("ResponseCode") == 0 and bulk_response.get("Status") == "success":
+                        bulk_register = bulk_response.get("BulkRegister", [])
+                        for result in bulk_register:
+                            domain_name = result.get("DomainName")
+                            registration_result = result.get("Result")
+                            message = result.get("Message")
+
+                            if registration_result == "success":
+                                purchased.append(domain_name)
+                            else:
+                                print(f"❌ Ошибка при регистрации {domain_name}: {message}")
+                    else:
+                        print(f"❌ Ошибка при выполнении запроса: {bulk_response}")
         except Exception as e:
             print(f"⚠️ Ошибка при покупке доменов: {e}")
-
     # Сохранение в БД
-    purchased_domains = [PurchasedDomain(domain=domain) for domain in purchased]
-    await PurchasedDomain.objects.abulk_create(purchased_domains)
-
+    if purchased:
+        purchased_domains = [PurchasedDomain(domain=domain) for domain in purchased]
+        await PurchasedDomain.objects.abulk_create(purchased_domains)
     return purchased
-
 
 # 🕹️ Обработка нажатия кнопки "Да" → Покупка доменов
 @router.callback_query(F.data == "yes_dynadot_pay")

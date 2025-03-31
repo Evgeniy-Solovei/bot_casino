@@ -2,6 +2,7 @@ import ssl
 import aiohttp
 import os
 from aiogram import Router, F
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import FSInputFile, CallbackQuery, Message, InlineKeyboardButton, InlineKeyboardMarkup
@@ -24,6 +25,47 @@ class DomainStates(StatesGroup):
     WaitingForFile = State()
     Processing = State()
 
+
+@router.message(Command("check_domains"))
+async def handle_check_domains_command(message: Message, state: FSMContext):
+    await message.answer("📤 Отправьте мне текстовый файл (.txt) с доменами для проверки")
+    await state.set_state(DomainStates.WaitingForFile)
+
+
+# 4. Обработчик файла для этого состояния
+@router.message(DomainStates.WaitingForFile, F.document)
+async def handle_check_file_upload(message: Message, state: FSMContext):
+    if not message.document.file_name.endswith('.txt'):
+        await message.answer("❌ Нужен файл в формате .txt")
+        return
+
+    file_path = os.path.join(UPLOAD_DIR, message.document.file_name)
+    try:
+        await message.bot.download(message.document.file_id, file_path)
+    except Exception as e:
+        await message.answer(f"❌ Ошибка загрузки: {e}")
+        await state.clear()
+        return
+
+    await message.answer("🔍 Начинаю проверку доменов...")
+    processed_file = await process_domains(file_path)
+
+    if processed_file:
+        buttons = [
+            [InlineKeyboardButton(text="Купить", callback_data="yes_dynadot_pay")],
+            [InlineKeyboardButton(text="Отменить", callback_data="no_dynadot_pay")],
+        ]
+        keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+        file = FSInputFile(processed_file)
+        await message.answer_document(
+            file,
+            caption="✅ Готово! Выберите действие:",
+            reply_markup=keyboard
+        )
+        await state.set_state(DomainStates.WaitingForConfirmation)
+    else:
+        await message.answer("❌ Нет доступных доменов для покупки")
+        await state.clear()
 
 # ✅ Проверка доступности домена
 async def check_domain_availability(domain, session):
