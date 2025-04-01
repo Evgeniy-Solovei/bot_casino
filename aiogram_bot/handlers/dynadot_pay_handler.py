@@ -23,6 +23,23 @@ class DomainPayStates(StatesGroup):
     WaitingForFile = State()
     ProcessingPurchase = State()
 
+async def send_domain_status_to_api(domain_name, status="Не Активен"):
+    url = "https://api.gang-soft.com/api/take_bot_data/"
+    payload = {
+        'current_domain': domain_name,
+        'domain_mask': '',
+        'status': status
+    }
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.post(url, data=payload) as response:
+                if response.status == 200:
+                    print(f"✔️ Домен {domain_name} успешно отправлен на сервер.")
+                else:
+                    print(f"❌ Ошибка при отправке домена {domain_name} на сервер: {response.status}")
+        except Exception as e:
+            print(f"⚠️ Ошибка при отправке данных домена {domain_name}: {e}")
+
 
 # ✅ Покупка доменов через API и сохранение в БД
 async def purchase_domains(domains, session):
@@ -50,6 +67,8 @@ async def purchase_domains(domains, session):
 
                             if registration_result == "success":
                                 purchased.append(domain_name)
+                                # Отправляем информацию на API после успешной регистрации
+                                await send_domain_status_to_api(domain_name)
                             else:
                                 print(f"❌ Ошибка при регистрации {domain_name}: {message}")
                     else:
