@@ -26,17 +26,22 @@ class DomainPayStates(StatesGroup):
 async def send_domain_status_to_api(domain_name, status="Не Активен"):
     url = "https://api.gang-soft.com/api/take_bot_data/"
     payload = {
-        'current_domain': domain_name,
-        'domain_mask': '',
-        'status': status
+        "current_domain": domain_name,
+        "domain_mask": domain_name,
+        "status": status
     }
-    async with aiohttp.ClientSession() as session:
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
+    connector = aiohttp.TCPConnector(ssl=False)  # 🔥 Отключаем проверку SSL
+    async with aiohttp.ClientSession(connector=connector) as session:
         try:
-            async with session.post(url, data=payload) as response:
+            async with session.post(url, data=payload, headers=headers) as response:  # data=payload, НЕ json=payload
+                response_text = await response.text()
                 if response.status == 200:
                     print(f"✔️ Домен {domain_name} успешно отправлен на сервер.")
                 else:
-                    print(f"❌ Ошибка при отправке домена {domain_name} на сервер: {response.status}")
+                    print(f"❌ Ошибка {response.status}: {response_text}")
         except Exception as e:
             print(f"⚠️ Ошибка при отправке данных домена {domain_name}: {e}")
 
@@ -111,6 +116,9 @@ async def handle_yes_dynadot_pay(callback_query: CallbackQuery, state: FSMContex
             file.writelines(f"{domain}\n" for domain in purchased)
         file = FSInputFile(OUTPUT_FILE)
         await callback_query.message.answer_document(file, caption="✅ Купленные домены сохранены.")
+        # Отправляем каждый купленный домен на API
+        for domain in purchased:
+            await send_domain_status_to_api(domain)
     else:
         await callback_query.message.answer("❌ Не удалось купить домены.")
 
