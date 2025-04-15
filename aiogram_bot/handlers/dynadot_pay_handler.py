@@ -1,3 +1,4 @@
+import json
 import os
 import ssl
 import aiohttp
@@ -46,6 +47,49 @@ async def send_domain_status_to_api(domain_name, status="Не Активен"):
             print(f"⚠️ Ошибка при отправке данных домена {domain_name}: {e}")
 
 
+async def set_nameservers(domain: str, api_key: str):
+    API_URL_SET = "https://api.dynadot.com/api3.json"
+    CLOUDFLARE_NS = ["alexandra.ns.cloudflare.com", "henrik.ns.cloudflare.com"]
+
+    ssl_context = ssl.create_default_context()
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
+
+    try:
+        params = {
+            "key": api_key,
+            "command": "set_ns",
+            "domain": domain,
+            "ns1": CLOUDFLARE_NS[0],
+            "ns2": CLOUDFLARE_NS[1]
+        }
+
+        headers = {"Accept": "application/json"}
+
+        async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=ssl_context)) as session:
+            async with session.get(API_URL_SET, params=params, headers=headers) as response:
+                raw_data = await response.text()
+                try:
+                    data = json.loads(raw_data)
+                except json.JSONDecodeError:
+                    print(f"⚠️ Невалидный JSON от Dynadot при установке NS для {domain}:\n{raw_data}")
+                    return False
+
+                response_data = data.get("SetNsResponse", {})
+                response_code = response_data.get("ResponseCode")
+
+                if str(response_code) == "0":
+                    print(f"✅ Успешно установлены NS для {domain}")
+                    return True
+                else:
+                    error = response_data.get("Error", "Unknown error")
+                    print(f"❌ Ошибка установки NS для {domain}: {error}")
+                    return False
+
+    except Exception as e:
+        print(f"🚨 Ошибка установки NS для {domain}: {str(e)}")
+        return False
+
 # ✅ Покупка доменов через API и сохранение в БД
 async def purchase_domains(domains, session):
     purchased = []
@@ -72,6 +116,8 @@ async def purchase_domains(domains, session):
 
                             if registration_result == "success":
                                 purchased.append(domain_name)
+                                # Установка NS сразу после регистрации
+                                await set_nameservers(domain_name, API_KEY)
                                 # Отправляем информацию на API после успешной регистрации
                                 await send_domain_status_to_api(domain_name)
                             else:
