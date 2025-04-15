@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import ssl
@@ -55,40 +56,47 @@ async def set_nameservers(domain: str, api_key: str):
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
 
-    try:
-        params = {
-            "key": api_key,
-            "command": "set_ns",
-            "domain": domain,
-            "ns1": CLOUDFLARE_NS[0],
-            "ns2": CLOUDFLARE_NS[1]
-        }
+    for attempt in range(3):
+        try:
+            params = {
+                "key": api_key,
+                "command": "set_ns",
+                "domain": domain,
+                "ns1": CLOUDFLARE_NS[0],
+                "ns2": CLOUDFLARE_NS[1]
+            }
 
-        headers = {"Accept": "application/json"}
+            headers = {"Accept": "application/json"}
 
-        async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=ssl_context)) as session:
-            async with session.get(API_URL_SET, params=params, headers=headers) as response:
-                raw_data = await response.text()
-                try:
-                    data = json.loads(raw_data)
-                except json.JSONDecodeError:
-                    print(f"⚠️ Невалидный JSON от Dynadot при установке NS для {domain}:\n{raw_data}")
-                    return False
+            async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=ssl_context)) as session:
+                async with session.get(API_URL_SET, params=params, headers=headers) as response:
+                    raw_data = await response.text()
+                    try:
+                        data = json.loads(raw_data)
+                    except json.JSONDecodeError:
+                        print(f"⚠️ Невалидный JSON от Dynadot при установке NS для {domain}:\n{raw_data}")
+                        continue
 
-                response_data = data.get("SetNsResponse", {})
-                response_code = response_data.get("ResponseCode")
+                    response_data = data.get("SetNsResponse", {})
+                    response_code = response_data.get("ResponseCode")
 
-                if str(response_code) == "0":
-                    print(f"✅ Успешно установлены NS для {domain}")
-                    return True
-                else:
-                    error = response_data.get("Error", "Unknown error")
-                    print(f"❌ Ошибка установки NS для {domain}: {error}")
-                    return False
+                    if str(response_code) == "0":
+                        print(f"✅ Успешно установлены NS для {domain}")
+                        return True
+                    else:
+                        error = response_data.get("Error", "Unknown error")
+                        print(f"❌ Попытка {attempt + 1}: ошибка установки NS для {domain}: {error}")
 
-    except Exception as e:
-        print(f"🚨 Ошибка установки NS для {domain}: {str(e)}")
-        return False
+        except Exception as e:
+            print(f"🚨 Попытка {attempt + 1}: ошибка установки NS для {domain}: {str(e)}")
+
+        if attempt < 2:
+            wait = 5 * (attempt + 1)
+            print(f"🔁 Повтор через {wait} секунд...")
+            await asyncio.sleep(wait)
+
+    print(f"❌ Все попытки установки NS для {domain} не увенчались успехом")
+    return False
 
 # ✅ Покупка доменов через API и сохранение в БД
 async def purchase_domains(domains, session):
