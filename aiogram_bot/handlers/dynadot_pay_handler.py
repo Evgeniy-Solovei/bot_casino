@@ -177,7 +177,7 @@ async def purchase_domains(domains, session):
     # Сохранение в БД
     if purchased:
         purchased_domains = [PurchasedDomain(domain=domain) for domain in purchased]
-        await PurchasedDomain.objects.abulk_create(purchased_domains)
+        await PurchasedDomain.objects.abulk_create(purchased_domains, ignore_conflicts=True)
     return purchased
 
 # 🕹️ Обработка нажатия кнопки "Да" → Покупка доменов
@@ -259,7 +259,7 @@ async def handle_file_upload(message: Message, state: FSMContext):
         if purchased:
             # Сохранение в БД
             purchased_domains = [PurchasedDomain(domain=domain) for domain in purchased]
-            await PurchasedDomain.objects.abulk_create(purchased_domains)
+            await PurchasedDomain.objects.abulk_create(purchased_domains, ignore_conflicts=True)
 
             # Сохранение купленных доменов в файл
             with open(OUTPUT_FILE, "w") as file:
