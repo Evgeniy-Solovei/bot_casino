@@ -3,6 +3,7 @@ import json
 import os
 import ssl
 import aiohttp
+import httpx
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message, FSInputFile
 from aiogram.fsm.context import FSMContext
@@ -25,7 +26,40 @@ class DomainPayStates(StatesGroup):
     WaitingForFile = State()
     ProcessingPurchase = State()
 
+
+async def create_cloudflare_zone(domain_name: str) -> list[str] | None:
+    """Создание зоны в Cloudflare и получение NS"""
+    headers = {
+        "X-Auth-Email": "odin.vin@yandex.ru",
+        "X-Auth-Key": "625a435d54464faa61c5fdf7360adade9e828",
+        "Content-Type": "application/json",
+    }
+    data = {
+        "name": domain_name,
+        "jump_start": True,
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "https://api.cloudflare.com/client/v4/zones",
+            json=data,
+            headers=headers,
+        )
+        if response.status_code == 200:
+            res_json = response.json()
+            if res_json.get("success"):
+                nameservers = res_json["result"].get("name_servers")
+                print(f"✅ Зона {domain_name} создана. NS: {nameservers}")
+                return nameservers
+            else:
+                print(f"⚠️ Не удалось создать зону: {res_json}")
+        else:
+            print(f"❌ Ошибка при создании зоны: {response.status_code} — {response.text}")
+    return None
+
+
 async def send_domain_status_to_api(domain_name, status="Не Активен"):
+    """Отправка статуса домена"""
     url = "https://api.gang-soft.com/api/take_bot_data/"
     payload = {
         "current_domain": domain_name,
@@ -35,10 +69,10 @@ async def send_domain_status_to_api(domain_name, status="Не Активен"):
     headers = {
         "Content-Type": "application/x-www-form-urlencoded"
     }
-    connector = aiohttp.TCPConnector(ssl=False)  # 🔥 Отключаем проверку SSL
+    connector = aiohttp.TCPConnector(ssl=False)
     async with aiohttp.ClientSession(connector=connector) as session:
         try:
-            async with session.post(url, data=payload, headers=headers) as response:  # data=payload, НЕ json=payload
+            async with session.post(url, data=payload, headers=headers) as response:
                 response_text = await response.text()
                 if response.status == 200:
                     print(f"✔️ Домен {domain_name} успешно отправлен на сервер.")
@@ -48,9 +82,9 @@ async def send_domain_status_to_api(domain_name, status="Не Активен"):
             print(f"⚠️ Ошибка при отправке данных домена {domain_name}: {e}")
 
 
-async def set_nameservers(domain: str, api_key: str):
+async def set_nameservers(domain: str, api_key: str, ns1: str, ns2: str):
+    """Установка NS через Dynadot"""
     API_URL_SET = "https://api.dynadot.com/api3.json"
-    CLOUDFLARE_NS = ["alexandra.ns.cloudflare.com", "henrik.ns.cloudflare.com"]
 
     ssl_context = ssl.create_default_context()
     ssl_context.check_hostname = False
@@ -62,8 +96,8 @@ async def set_nameservers(domain: str, api_key: str):
                 "key": api_key,
                 "command": "set_ns",
                 "domain": domain,
-                "ns1": CLOUDFLARE_NS[0],
-                "ns2": CLOUDFLARE_NS[1]
+                "ns1": ns1,
+                "ns2": ns2
             }
 
             headers = {"Accept": "application/json"}
@@ -124,8 +158,14 @@ async def purchase_domains(domains, session):
 
                             if registration_result == "success":
                                 purchased.append(domain_name)
-                                # Установка NS сразу после регистрации
-                                await set_nameservers(domain_name, API_KEY)
+                                # 1. Создаём зону в Cloudflare
+                                nameservers = await create_cloudflare_zone(domain_name)
+                                if nameservers:
+                                    # 2. Устанавливаем NS у регистратора
+                                    await set_nameservers(domain_name, API_KEY, nameservers[0], nameservers[1])
+                                else:
+                                    print(f"❗ NS для {domain_name} не получены, пропускаем установку NS.")
+
                                 # Отправляем информацию на API после успешной регистрации
                                 await send_domain_status_to_api(domain_name)
                             else:
