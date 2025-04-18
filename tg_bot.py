@@ -4,7 +4,7 @@ import asyncio
 import logging
 import os
 from aiogram import Bot, Dispatcher
-from aiogram_bot.handlers import start, search_handler, dynadot_handler, dynadot_pay_handler, domains
+from aiogram_bot.handlers import start, search_handler, dynadot_handler, dynadot_pay_handler, domains, add_domains
 from dotenv import load_dotenv
 
 
@@ -21,7 +21,8 @@ async def set_commands():
         BotCommand(command="/start", description="Начать заново"),
         BotCommand(command="/search", description="Поиск на РКН"),
         BotCommand(command="/check_domains", description="Проверить домены в Dynadot (прикрепите файл)"),
-        BotCommand(command="/domains", description="Список доменов")
+        BotCommand(command="/domains", description="Список доменов"),
+        BotCommand(command="/add_domains", description="Добавить отдельно купленные доменные имена текст/doc.txt")
     ]
     await bot.set_my_commands(commands)
 
@@ -42,4 +43,5 @@ if __name__ == "__main__":
     dp.include_routers(dynadot_handler.router)
     dp.include_routers(dynadot_pay_handler.router)
     dp.include_routers(domains.router)
+    dp.include_routers(add_domains.router)
     asyncio.run(main())

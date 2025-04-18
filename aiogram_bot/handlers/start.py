@@ -11,6 +11,7 @@ async def start_command(message: types.Message):
         "/start - Начать заново\n"
         "/search <домен> - Поиск на РКН по разблокированным доменам или URL\n"
         "/check_domains - Проверить домены в Dynadot (прикрепите файл)\n"
-        "/domains - Список купленных доменных имен"
+        "/domains - Список купленных доменных имен\n"
+        "/add_domains - Добавить отдельно купленные доменные имена текст/doc.txt\n"
     )
     await message.reply(help_text)
