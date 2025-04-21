@@ -51,14 +51,14 @@ async def process_domains_input(message: Message, state: FSMContext):
 
     # Ищем уже существующие домены (асинхронно)
     existing_domains = set()
-    async for domain in PurchasedDomain.objects.filter(name__in=domains_to_add).aiterator():
+    async for domain in PurchasedDomain.objects.filter(domain__in=domains_to_add).aiterator():
         existing_domains.add(domain.name)
 
     new_domains = domains_to_add - existing_domains
 
     # Добавляем только новые домены
     if new_domains:
-        await PurchasedDomain.objects.abulk_create([PurchasedDomain(name=d, last_checked=now()) for d in new_domains])
+        await PurchasedDomain.objects.abulk_create([PurchasedDomain(domain=d, purchased_at=now()) for d in new_domains])
 
         # Просто прогоняем каждый домен через API без сохранения результатов
         for domain in new_domains:
