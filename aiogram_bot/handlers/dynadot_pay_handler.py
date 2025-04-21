@@ -29,6 +29,8 @@ class DomainPayStates(StatesGroup):
 
 async def create_cloudflare_zone(domain_name: str) -> list[str] | None:
     """Создание зоны в Cloudflare и получение NS"""
+    print(f"📤 Отправка запроса на создание зоны для домена: {domain_name}")
+
     headers = {
         "X-Auth-Email": "odin.vin@yandex.ru",
         "X-Auth-Key": "625a435d54464faa61c5fdf7360adade9e828",
@@ -40,11 +42,22 @@ async def create_cloudflare_zone(domain_name: str) -> list[str] | None:
     }
 
     async with httpx.AsyncClient() as client:
-        response = await client.post(
-            "https://api.cloudflare.com/client/v4/zones",
-            json=data,
-            headers=headers,
-        )
+        try:
+            response = await client.post(
+                "https://api.cloudflare.com/client/v4/zones",
+                json=data,
+                headers=headers,
+            )
+        except Exception as e:
+            print(f"💥 Ошибка при попытке отправить запрос: {e}")
+            return None
+
+        print(f"📩 Ответ от Cloudflare: статус {response.status_code}")
+        print(f"📄 Тело ответа: {response.text}")
+        print(f"🧾 Заголовки ответа:")
+        for k, v in response.headers.items():
+            print(f"   {k}: {v}")
+
         if response.status_code == 200:
             res_json = response.json()
             if res_json.get("success"):
@@ -52,9 +65,16 @@ async def create_cloudflare_zone(domain_name: str) -> list[str] | None:
                 print(f"✅ Зона {domain_name} создана. NS: {nameservers}")
                 return nameservers
             else:
-                print(f"⚠️ Не удалось создать зону: {res_json}")
+                print(f"⚠️ Не удалось создать зону (ответ без success): {res_json}")
+        elif response.status_code == 429:
+            print("🚫 Превышен лимит запросов! Подожди немного или уменьшай частоту запросов.")
+            retry_after = response.headers.get("Retry-After")
+            if retry_after:
+                print(f"⏱ Сервер просит подождать: {retry_after} секунд.")
         else:
             print(f"❌ Ошибка при создании зоны: {response.status_code} — {response.text}")
+
+    print("🔚 Возвращаю None, зона не создана.")
     return None
 
 
