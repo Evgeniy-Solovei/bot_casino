@@ -52,7 +52,7 @@ async def process_domains_input(message: Message, state: FSMContext):
     # Ищем уже существующие домены (асинхронно)
     existing_domains = set()
     async for domain in PurchasedDomain.objects.filter(domain__in=domains_to_add).aiterator():
-        existing_domains.add(domain.name)
+        existing_domains.add(domain.domain)
 
     new_domains = domains_to_add - existing_domains
 
