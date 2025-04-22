@@ -1,3 +1,5 @@
+import asyncio
+
 from aiogram import types, Router, F
 from aiogram.filters import Command
 from aiogram.types import Message
@@ -31,47 +33,45 @@ async def add_domains_command(message: Message, state: FSMContext):
 async def process_domains_input(message: Message, state: FSMContext):
     domains_to_add = set()
 
-    # Если пользователь ввел текст
+    # Ввод с текста
     if message.text:
-        # Извлекаем домены из текста сообщения
         domains_to_add = {d.strip().lower() for d in message.text.split() if DOMAIN_REGEX.match(d.strip())}
 
-    # Если пользователь отправил файл
+    # Ввод из файла
     elif message.document:
         file = await message.bot.get_file(message.document.file_id)
         file_content = await message.bot.download_file(file.file_path)
-        # Читаем домены из файла
         domains_to_add = {line.strip().lower() for line in file_content.read().decode("utf-8").splitlines() if DOMAIN_REGEX.match(line.strip())}
 
-    # Если домены не найдены
     if not domains_to_add:
         await message.answer("⚠️ Не найдено корректных доменных имен.")
-        await state.clear()  # Сбрасываем состояние
+        await state.clear()
         return
 
-    # Ищем уже существующие домены (асинхронно)
+    # Проверяем флаг "повторно прогонять существующие домены"
+    recheck_existing = True
+
     existing_domains = set()
     async for domain in PurchasedDomain.objects.filter(domain__in=domains_to_add).aiterator():
         existing_domains.add(domain.domain)
 
     new_domains = domains_to_add - existing_domains
 
-    # Добавляем только новые домены
     if new_domains:
         await PurchasedDomain.objects.abulk_create([PurchasedDomain(domain=d, purchased_at=now()) for d in new_domains])
 
-        # Просто прогоняем каждый домен через API без сохранения результатов
-        for domain in new_domains:
-            try:
-                nameservers = await create_cloudflare_zone(domain)
-                if nameservers:
-                    await set_nameservers(domain, API_KEY, nameservers[0], nameservers[1])
-            except Exception as e:
-                await message.answer(f"⚠️ Ошибка при обработке домена {domain}: {str(e)}")
-                continue
+    domains_for_check = new_domains.union(existing_domains) if recheck_existing else new_domains
+    for i, domain in enumerate(domains_for_check):
+        try:
+            nameservers = await create_cloudflare_zone(domain)
+            if nameservers:
+                await set_nameservers(domain, API_KEY, nameservers[0], nameservers[1])
+        except Exception as e:
+            await message.answer(f"⚠️ Ошибка при обработке домена {domain}: {str(e)}")
 
-        await message.answer(f"✅ Добавлены домены:\n" + "\n".join(new_domains))
-    else:
-        await message.answer("⚠️ Все домены уже есть в БД.")
+        # ⏳ Задержка между запросами, чтобы не получить 429
+        if i != len(domains_for_check) - 1:
+            await asyncio.sleep(2)
 
+    await message.answer(f"✅ Прогнаны домены:\n" + "\n".join(domains_for_check))
     await state.clear()
