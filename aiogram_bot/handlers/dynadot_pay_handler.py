@@ -27,13 +27,36 @@ class DomainPayStates(StatesGroup):
     ProcessingPurchase = State()
 
 
+def get_cloudflare_credentials(domain_name: str) -> tuple[str, str] | None:
+    """Возвращает email и key для Cloudflare в зависимости от домена"""
+    domain_name = domain_name.lower()
+    if "1win" in domain_name:
+        return (
+            os.getenv("CLOUDFLARE_EMAIL_1WIN"),
+            os.getenv("CLOUDFLARE_KEY_1WIN"),
+        )
+    elif "pokerdom" in domain_name:
+        return (
+            os.getenv("CLOUDFLARE_EMAIL_POKERDOM"),
+            os.getenv("CLOUDFLARE_KEY_POKERDOM"),
+        )
+    return None
+
+
 async def create_cloudflare_zone(domain_name: str) -> list[str] | None:
     """Создание зоны в Cloudflare и получение NS"""
     print(f"📤 Отправка запроса на создание зоны для домена: {domain_name}")
 
+    creds = get_cloudflare_credentials(domain_name)
+    if not creds:
+        print("⚠️ Неизвестный домен — не удалось выбрать аккаунт Cloudflare.")
+        return None
+
+    email, api_key = creds
+
     headers = {
-        "X-Auth-Email": "odin.vin@yandex.ru",
-        "X-Auth-Key": "625a435d54464faa61c5fdf7360adade9e828",
+        "X-Auth-Email": email,
+        "X-Auth-Key": api_key,
         "Content-Type": "application/json",
     }
     data = {
@@ -78,12 +101,23 @@ async def create_cloudflare_zone(domain_name: str) -> list[str] | None:
     return None
 
 
+def get_domain_mask(domain_name: str) -> str | None:
+    domain_name = domain_name.lower()
+    if "1win" in domain_name:
+        return "1win"
+    elif "pokerdom" in domain_name:
+        return "pokerdom"
+    return "UNKNOWN"
+
 async def send_domain_status_to_api(domain_name, status="Не Активен"):
     """Отправка статуса домена"""
     url = "https://api.gang-soft.com/api/take_bot_data/"
+
+    domain_mask = get_domain_mask(domain_name)
+
     payload = {
         "current_domain": domain_name,
-        "domain_mask": domain_name,
+        "domain_mask": domain_mask,
         "status": status
     }
     headers = {
